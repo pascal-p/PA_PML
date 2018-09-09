@@ -201,7 +201,7 @@ $(document).ready(function () {
 <div id="synopsis" class="section level1">
 <h1><span class="header-section-number">1</span> Synopsis</h1>
 <p>The aim of this report is to predict the manner in which a group of six people did their fitness exercise, using data from accelerometers on the belt, forearm, arm, and dumbell. More information about the datasets (a training set and a test one) is available at <a href="http://groupware.les.inf.puc-rio.br/har" class="uri">http://groupware.les.inf.puc-rio.br/har</a> (in particular cf. section Weight Lifting Exercises Dataset).</p>
-<p>Our procedure will be as followed:</p>
+<p>Our procedure involve the following steps in this order:</p>
 <ul>
 <li>load the packages we need,</li>
 <li>load the two datasets,</li>
@@ -214,7 +214,7 @@ $(document).ready(function () {
 <li>use the best model(s) to make prediction for the outcome variable(<code>classe</code>) with the test data set.</li>
 </ul>
 <p>In each case we will present the accuracy and Kappa on training and validation sets plus the out-of sample error (abbreviated as <code>oose</code> in the rest of this document). A complete comparison is provided in the “Summary” section, while the appendix provide even more details about the intermediate results.</p>
-<p>The whole code for this project was put into a <code>R script</code> file named <code>pml.R</code> (available at <em>TODO</em> github repository).</p>
+<p>The whole code for this project was put into a <code>R script</code> file named <code>pml.R</code> available in this repository: <a href="https://github.com/pascal-p/PA_PML" class="uri">https://github.com/pascal-p/PA_PML</a></p>
 </div>
 <div id="data-processing" class="section level1">
 <h1><span class="header-section-number">2</span> Data Processing</h1>
@@ -346,7 +346,10 @@ df_validSet &lt;-<span class="st"> </span>all_ds[[<span class="dv">2</span>]] <s
 </tr>
 </tbody>
 </table>
-<p>Remark: the performance is not very impressive.</p>
+<p>Remark:</p>
+<ul>
+<li>the performance is not very impressive.</li>
+</ul>
 </div>
 <div id="lda-model" class="section level3">
 <h3><span class="header-section-number">2.5.2</span> LDA model</h3>
@@ -382,7 +385,10 @@ df_validSet &lt;-<span class="st"> </span>all_ds[[<span class="dv">2</span>]] <s
 </tr>
 </tbody>
 </table>
-<p>Remark: Here we can see a definitive improvement of the performance of LDA over the previous attempt with CART.</p>
+<p>Remark:</p>
+<ul>
+<li>here we can see a definitive improvement of the performance of LDA over the previous attempt with CART.</li>
+</ul>
 </div>
 <div id="svm-model" class="section level3">
 <h3><span class="header-section-number">2.5.3</span> SVM model</h3>
@@ -418,7 +424,11 @@ df_validSet &lt;-<span class="st"> </span>all_ds[[<span class="dv">2</span>]] <s
 </tr>
 </tbody>
 </table>
-<p>Remark: - Here we can see a definitive improvement of the performance of SVM over the previous attempt with LDA and CART. - The procedure is more involved and CPU intensive though (over 30 minutes against approximately 10 seconds in the previous cases).</p>
+<p>Remarks:</p>
+<ul>
+<li>we can see a definitive improvement in the performance of SVM over the previous attempts with LDA and CART.</li>
+<li>the procedure is more involved and CPU intensive though (over 30 minutes against approximately 10 seconds in the previous cases).</li>
+</ul>
 </div>
 </div>
 <div id="bagging-technique" class="section level2">
@@ -469,9 +479,9 @@ df_validSet &lt;-<span class="st"> </span>all_ds[[<span class="dv">2</span>]] <s
 </tr>
 </tbody>
 </table>
-<p>Remark:</p>
+<p>Remarks:</p>
 <ul>
-<li>the improvement over the single CART model is impressive with 98.3% on validation set (it was 94.4% for CART),</li>
+<li>the improvement over the single CART model is impressive with 98.3% on validation set (it was 49.4% for CART), so close to a factor 2,</li>
 <li>the <code>oose</code> dropped from 50.6% to 1.7%.</li>
 <li>the processing time increased by a factor of 19 for bagged LDA model.</li>
 </ul>
@@ -513,7 +523,10 @@ df_validSet &lt;-<span class="st"> </span>all_ds[[<span class="dv">2</span>]] <s
 </tr>
 </tbody>
 </table>
-<p>Remark: no improvement nor any deterioration in this case for the results (are the samples too similar?).</p>
+<p>Remark:</p>
+<ul>
+<li>no improvement nor any deterioration in this case for the results (are the samples too similar?).</li>
+</ul>
 </div>
 <div id="random-forest" class="section level3">
 <h3><span class="header-section-number">2.6.3</span> Random Forest</h3>
@@ -549,7 +562,10 @@ df_validSet &lt;-<span class="st"> </span>all_ds[[<span class="dv">2</span>]] <s
 </tr>
 </tbody>
 </table>
-<p>Remark: this model is even better than Bagging CART, it even performs slightly better on validation set with 99.2% of accuracy (compare to training set).</p>
+<p>Remark:</p>
+<ul>
+<li>this model is even better than Bagging CART, it even performs slightly better on validation set with 99.2% of accuracy (compare to training set).</li>
+</ul>
 </div>
 </div>
 <div id="boosting-technique" class="section level2">
@@ -589,12 +605,15 @@ df_validSet &lt;-<span class="st"> </span>all_ds[[<span class="dv">2</span>]] <s
 </tr>
 </tbody>
 </table>
-<p>Remark: This model yields good results and ranks at the third place behind Random Forest and Bagging CART models.</p>
+<p>Remark:</p>
+<ul>
+<li>this model yields good results and ranks at the third place behind Random Forest and Bagging CART models.</li>
+</ul>
 </div>
 </div>
 <div id="stacking-technique" class="section level2">
 <h2><span class="header-section-number">2.8</span> Stacking technique</h2>
-<p>cf. appendix for all the details.</p>
+<p>Cf. appendix for all the details.</p>
 </div>
 </div>
 <div id="summary" class="section level1">
@@ -726,7 +745,7 @@ df_validSet &lt;-<span class="st"> </span>all_ds[[<span class="dv">2</span>]] <s
 <div id="appendix" class="section level1">
 <h1><span class="header-section-number">5</span> Appendix</h1>
 <p>Here, I am providing some more details about the results.<br />
-For the code source, once again please refer to R script <code>pml.R</code>.</p>
+For the code source, once again please refer to R script <code>pml.R</code>(available here: <a href="https://github.com/pascal-p/PA_PML" class="uri">https://github.com/pascal-p/PA_PML</a>)</p>
 <div id="first-models-1" class="section level2">
 <h2><span class="header-section-number">5.1</span> First models</h2>
 <div id="cart-details" class="section level3">

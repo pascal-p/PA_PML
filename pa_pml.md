@@ -19,7 +19,7 @@ output:
 # Synopsis
 The aim of this report is to predict the manner in which a group of six people did their fitness exercise, using data from accelerometers on the belt, forearm, arm, and dumbell. More information about the datasets (a training set and a test one) is available at http://groupware.les.inf.puc-rio.br/har (in particular cf. section Weight Lifting Exercises Dataset).
 
-Our procedure will be as followed:
+Our procedure involve the following steps in this order:
   
 - load the packages we need,
 - load the two datasets,
@@ -33,7 +33,7 @@ Our procedure will be as followed:
 
 In each case we will present the accuracy and Kappa on training and validation sets plus the out-of sample error (abbreviated as `oose` in the rest of this document). A complete comparison is provided in the "Summary" section, while the appendix provide even more details about the intermediate results.
 
-The whole code for this project was put into a `R script` file named `pml.R` (available at *TODO* github repository). 
+The whole code for this project was put into a `R script` file named `pml.R` available in this repository: https://github.com/pascal-p/PA_PML 
 
 
 # Data Processing
@@ -175,7 +175,10 @@ ds.names    ds.acc_tr   ds.kappa_tr   ds.acc_vs   ds.kappa_vs     ds.oose   ds.u
 ---------  ----------  ------------  ----------  ------------  ----------  ---------
 CART        0.5009162      0.348063   0.4941376      0.338296   0.5058624     12.159
 
-Remark: the performance is not very impressive.
+
+Remark: 
+
+- the performance is not very impressive.
 
 
 ### LDA model
@@ -196,7 +199,10 @@ Table: LDA Summary
 ---  ---------  ----------  ------------  ----------  ------------  ----------  ---------
 2    LDA         0.7037169     0.6250863   0.6973662     0.6172881   0.3026338       6.59
 
-Remark: Here we can see a definitive improvement of the performance of LDA over the previous attempt with CART.
+
+Remark: 
+
+- here we can see a definitive improvement of the performance of LDA over the previous attempt with CART.
 
 ### SVM model
 
@@ -215,9 +221,10 @@ Table: SVM Summary
 ---  ---------  ----------  ------------  ----------  ------------  ---------  ---------
 3    SVM         0.9232702     0.9027418    0.919966     0.8985517   0.080034   1827.863
 
-Remark: 
-- Here we can see a definitive improvement of the performance of SVM over the previous attempt with LDA and CART.
-- The procedure is more involved and CPU intensive though (over 30 minutes against approximately 10 seconds in the previous cases).
+Remarks: 
+
+- we can see a definitive improvement in the performance of SVM over the previous attempts with LDA and CART.
+- the procedure is more involved and CPU intensive though (over 30 minutes against approximately 10 seconds in the previous cases).
 
 ## Bagging technique
 
@@ -250,9 +257,9 @@ Table: Summary Bagging CART
 ---  -------------  ----------  ------------  ----------  ------------  ----------  ---------
 4    Bagging CART    0.9855152     0.9816769   0.9828377     0.9782894   0.0171623    209.319
 
-Remark:
+Remarks:
 
-- the improvement over the single CART model is impressive with 98.3% on validation set (it was 94.4% for CART), 
+- the improvement over the single CART model is impressive with 98.3% on validation set (it was 49.4% for CART), so close to a factor 2,
 - the `oose` dropped from 50.6% to 1.7%.
 - the processing time increased by a factor of 19 for bagged LDA model.
 
@@ -277,7 +284,9 @@ Table: Bagging LDA Summary
 ---  ------------  ----------  ------------  ----------  ------------  ----------  ---------
 5    Bagging LDA    0.7029541     0.6241709   0.6961767     0.6156871   0.3038233    897.269
 
-Remark: no improvement nor any deterioration in this case for the results (are the samples too similar?).  
+Remark: 
+
+- no improvement nor any deterioration in this case for the results (are the samples too similar?).  
 
 
 ### Random Forest
@@ -298,7 +307,10 @@ Table: RF Summary
 ---  --------------  ----------  ------------  ----------  ------------  ----------  ---------
 6    Random Forest    0.9917026     0.9895035   0.9920136     0.9898954   0.0079864   1435.185
 
-Remark: this model is even better than Bagging CART, it even performs slightly better on validation set with 99.2% of accuracy (compare to training set).
+
+Remark: 
+
+- this model is even better than Bagging CART, it even performs slightly better on validation set with 99.2% of accuracy (compare to training set).
 
 ## Boosting technique
 
@@ -322,10 +334,13 @@ Table: GBM Summary
 ---  ---------  ----------  ------------  ----------  ------------  ----------  ---------
 7    GBM         0.9628018     0.9529358   0.9634664     0.9537914   0.0365336    518.505
 
-Remark: This model yields good results and ranks at the third place behind Random Forest and Bagging CART models.  
+Remark: 
+
+- this model yields good results and ranks at the third place behind Random Forest and Bagging CART models.  
 
 ## Stacking technique
-cf. appendix for all the details.
+
+Cf. appendix for all the details.
 
 # Summary
 
@@ -401,7 +416,7 @@ Finally, I learned a few techniques while working on this project *and not surpr
 # Appendix 
 
 Here, I am providing some more details about the results.  
-For the code source, once again please refer to R script `pml.R`.
+For the code source, once again please refer to R script `pml.R`(available here: https://github.com/pascal-p/PA_PML)
 
 ## First models
 
