@@ -8,7 +8,7 @@ output:
     toc_depth: 3
     number_sections: true
     keep_md: true
-    df_print: paged
+    df_print: tibble
     highlight: zenburn
     theme: simplex
 
@@ -571,7 +571,7 @@ print(resGBM, digits=4)
 
 - We first need to define three different sets: training, testing and validation
 
-```{r A_stacking_sets, echo=F}
+```{r A_stacking_sets, echo=F, comment=''}
 if ((!exists("df_ntrainSet")) || (!exists("df_ntestSet")) || (!exists("df_nvalidSet"))) {
   all_ds <- splitDS(df_trainingC, cut=0.6)
   df_ntrainSet <- all_ds[[1]]

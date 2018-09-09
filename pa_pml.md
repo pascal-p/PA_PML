@@ -8,7 +8,7 @@ output:
     toc_depth: 3
     number_sections: true
     keep_md: true
-    df_print: paged
+    df_print: tibble
     highlight: zenburn
     theme: simplex
 
@@ -828,9 +828,9 @@ Balanced Accuracy      0.9857   0.9629   0.9641   0.9781   0.9916
 
 
 ```
-## [1] 11776    53
-## [1] 3923   53
-## [1] 3923   53
+[1] 11776    53
+[1] 3923   53
+[1] 3923   53
 ```
 
 - We then build three models as before on the (smaller) training set: CART, LDA and SVM.
