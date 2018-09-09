@@ -17,5 +17,10 @@ output:
 # Project instructions 
   These can be found at https://www.coursera.org/learn/practical-machine-learning/peer/R43St/prediction-assignment-writeup
 
+# Compiled html file available
+
+- https://rpubs.com/Pascal/pa_pml
+- (and a copy with a rendered html of lesser quality): https://pascal-p.github.io/PA_PML/
+
 # Reference
   Coursera Course - *Practical Machine Learning* https://www.coursera.org/learn/practical-machine-learning/home/welcome.
