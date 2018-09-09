@@ -1,0 +1,6 @@
+.R*
+_*.R
+notes_pml.org
+
+*.BAK
+*_cache/

@@ -1,0 +1,664 @@
+---
+title: "PA PML"
+author: "Pascal P"
+date: "8 September 2018"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+    keep_md: true
+    df_print: paged
+    highlight: zenburn
+    theme: simplex
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=TRUE, cache=TRUE, warning=FALSE, message=FALSE, fig.path='figure/')
+```
+
+# Synopsis
+The aim of this report is to predict the manner in which a group of six people did their fitness exercise, using data from accelerometers on the belt, forearm, arm, and dumbell. More information about the datasets (a training set and a test one) is available at http://groupware.les.inf.puc-rio.br/har (in particular cf. section Weight Lifting Exercises Dataset).
+
+Our procedure will be as followed:
+  
+- load the packages we need,
+- load the two datasets,
+- clean up these two datasets in order the reduce the dimension without loosing on our prediction objective,
+- split the training dataset into two subsets: a training one and a validation one,
+- define three "simple" models: decision tree (CART), LDA and SVM for predicting the outcome variable `classe`,
+- use bagging technique with bagged CART (Classification and Regression Tree) and RF (Random Forest),
+- use boosting technique with SGB (Stochastic Gradient Boosting), using SBM model
+- use stacking technique combining predictions from CART, LDA  and SVM (*moved to Appendix*),
+- use the best model(s) to make prediction for the outcome variable(`classe`) with the test data set.
+
+In each case we will present the accuracy and Kappa on training and validation sets plus the out-of sample error (abbreviated as `oose` in the rest of this document). A complete comparison is provided in the "Summary" section, while the appendix provide even more details about the intermediate results.
+
+The whole code for this project was put into a `R script` file named `pml.R` (available at *TODO* github repository). 
+
+
+# Data Processing
+
+## Loading required packages and setting the seed
+```{r load_pk, echo=T}
+library(caret)
+# library(caretEnsemble)
+library(rpart)          # for decision tree
+library(randomForest)
+
+set.seed(20180905)
+```
+
+## Loading the data
+
+For this project we downloaded the two datasets from:
+
+- training data: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+- testing data: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+```{r load_data, echo=F}
+setDataDir <- function(dir="data") {
+  (!file.exists(dir)) && { dir.create(dir) }
+  return(dir)
+}
+
+loadDS <- function (url_prefx='https://d396qusza40orc.cloudfront.net/predmachlearn', dset="training", 
+                    prefx='pml', suffx='csv', dir=setDataDir()) {
+  
+  file <- paste(prefx, dset, sep='-')
+  file <- paste(file, suffx, sep='.') 
+  fpath <- paste(dir, file, sep='/')
+  
+  if (!file.exists(fpath)) {   
+    download.file(url=paste(url_prefx, file, sep='/'), method="curl", destfile=fpath)
+  }
+  
+  df <- read.csv(fpath, na.strings=c('NA', ''), header=T)
+  return(df)
+}
+```
+Note: the original datasets are as follows:
+
+- training dataset of dimension $19622\times160$
+- a test one of dimension $20\times160$
+
+```{r load_dfs}
+if (!exists("df_training")) { df_training <- loadDS() }               # df_training == 19622x160
+if (!exists("df_testing")) { df_testing  <- loadDS(dset='testing') }  # df_testing  == 20x160
+```
+
+## Cleaning up the data
+
+We use the following three step process:
+
+1. Remove variables with near zero variance (low contribution in explaining our outcome variable)
+1. Remove variables with missing values
+1. Finally the first six columns of our dataset which are ids, name and timestamps can be removed as these are very unlikely to determine the outcome (`classe` variable).
+
+```{r clean_data}
+cleanDS <- function(df_training, df_testing, col2rm=c(1:6)) {
+  # 1 - eliminate near zero variance variables
+  res <- nearZeroVar(df_training, saveMetrics=TRUE)
+  df_train_reduce <- df_training[ , !res$nzv] # 19622 x 117
+  df_test_reduce  <- df_testing[ , !res$nzv]  #    20 x 117
+  rm(list=c("df_training", "df_testing"))
+  
+  # 2 - eliminate variables (columns) containing NA values
+  cols_wo_na <- colSums(is.na(df_train_reduce)) == 0
+  df_train_reduce <- df_train_reduce[which(cols_wo_na)] # 19622 x 59
+  df_test_reduce  <- df_test_reduce[which(cols_wo_na)]  #    20 x 59
+  
+  # 3 - Finally the first 6 colnames: ids, name and timestamps can be removed
+  #   X user_name raw_timestamp_part_1 raw_timestamp_part_2   cvtd_timestamp num_window
+  df_training <- df_train_reduce[, -col2rm] # 19622x53
+  df_testing <- df_test_reduce[, -col2rm]   #  20x53
+  
+  return(list(df_training, df_testing))
+}
+
+# clean
+all_ds <- cleanDS(df_training, df_testing)
+df_trainingC <- all_ds[[1]] # 19622x53
+df_testing  <- all_ds[[2]]  # 20x53
+rm(all_ds)
+```
+
+Our datasets have now the following dimensions:
+
+- training dataset, dimension: $19622\times53$
+- test set, dimension: $20\times53$
+
+
+## Splitting the data
+
+We split our training dataset into two subsets:
+
+- training (70%) and
+- validation (30%, it will be used to define oose)
+
+```{r split_data}
+splitDS <- function(df, cut=0.7) {
+  mySet <- createDataPartition(df$classe, p=cut, list=F)
+  trainSet <- df[mySet, ] 
+  validSet <- df[-mySet, ]
+  return(list(trainSet, validSet))
+}
+
+all_ds <- splitDS(df_trainingC)
+df_trainSet <- all_ds[[1]] # 13737x53
+df_validSet <- all_ds[[2]] # 5885x53
+rm(all_ds)
+```
+
+## First models
+
+Here we use the `caret` package to define three models: `CART`, `LDA` and `SVM`.
+
+- Decision trees (CART) are robust to errors, missing values (here we eliminated them) and outliers and they are well suited for target function with discrete values (our case here), however they can overfit.
+
+- LDA [Linear Discriminant Analysis] is a simple and effective method for classification that makes assumptions on the underlying data such as: the samples are drawn from a multivariate Gaussian (aka multivariate normal) with a class specific mean vector and a common covariance matrix. This may not be the case for our datasets.
+
+- SVM [Support Vector Machine] does not make strong assumptions on the data, nor does it overfit. It does look like a very good candidate for our analysis.
+
+For all of these algorithms  we use k-fold cross validation technique with ($k=10$).  
+
+Check `Summary` section for a whole comparison between models (in term of *accuracy, Kappa and out-of sample errors*) and for the meaning of the column names.
+
+```{r cross-validation}
+trCtrl <- function(meth='cv', k=10) {
+  return(trainControl(method=meth, number=k,
+                      verboseIter=F, savePredictions=F))
+}
+```
+
+```{r pred_res, echo=F}
+predRes <- function(model, validSet) {
+  pred <- predict(model, newdata=validSet)
+  # Eval out-of sample error (oose)
+  resCM <- confusionMatrix(validSet$classe, pred)
+  oose <- 1 - resCM$overall[[1]]
+  return(list(model, pred, resCM, oose))
+}
+
+resDF <- function(df=NULL, model=model, label=label, resCM=res, oose=oose) {
+  ix_max      <- which.max(model$results$Accuracy)
+  ds.names    <- c(label) # ex. "DT" 
+  ds.acc_tr   <- c(model$results$Accuracy[[ix_max]])
+  ds.kappa_tr <- c(model$results$Kappa[[ix_max]])
+  ds.acc_vs   <- c(resCM$overall[[1]])
+  ds.kappa_vs <- c(resCM$overall[[2]])
+  ds.oose     <- c(oose)
+  ds.utime    <- model$times$everything[[1]]
+  
+  ndf <- data.frame(ds.names, ds.acc_tr, ds.kappa_tr, ds.acc_vs, ds.kappa_vs, ds.oose, ds.utime)
+  if (exists("df")) { rbind(df, ndf) }
+  else { ndf }
+}
+```
+
+### CART model
+
+```{r cart_model}
+modCARTfn <- function(trainSet, validSet, trctrl=trCtrl()) {
+  model <- train(classe ~ ., data=trainSet, method="rpart", 
+                 trControl=trctrl)
+  predRes(model, validSet)
+}
+```
+
+```{r cart_model_det, echo=F}
+if (!exists("modCART")) {
+  set.seed(20180905)
+  all <- modCARTfn(df_trainSet, df_validSet)
+  modCART  <- all[[1]]
+  predCART <- all[[2]]
+  resCART  <- all[[3]]
+  ooseCART <- all[[4]]
+  ix <- 1
+  sum_df <- resDF(model=modCART, label="CART", resCM=resCART, oose=ooseCART)
+  rm(all)
+}
+
+knitr::kable(sum_df[ix, ], caption='CART Summary')
+```
+
+Remark: the performance is not very impressive.
+
+
+### LDA model
+
+```{r lda_model}
+modLDAfn <- function(trainSet, validSet, trctrl=trCtrl()) {
+  model <- train(classe ~ ., data=trainSet, method="lda", 
+                 trControl=trctrl)
+  predRes(model, validSet)
+}
+```
+
+```{r LDA_model_det, echo=F}
+if (!exists("modLDA")) {
+  set.seed(20180905)
+  all <- modLDAfn(df_trainSet, df_validSet)
+  modLDA  <- all[[1]]
+  predLDA <- all[[2]]
+  resLDA  <- all[[3]]
+  ooseLDA <- all[[4]]
+  sum_df <- resDF(sum_df, model=modLDA, label="LDA", resCM=resLDA, oose=ooseLDA)
+  rm(all)
+  ix <- ix + 1
+}
+
+knitr::kable(sum_df[ix, ], caption='LDA Summary')
+```
+
+Remark: Here we can see a definitive improvement of the performance of LDA over the previous attempt with CART.
+
+### SVM model
+
+```{r svm_model}
+modSVMfn <- function(trainSet, validSet, trctrl=trCtrl()) {
+  model <- train(classe ~ ., data=trainSet, method="svmRadial", 
+                 trControl=trctrl, prox=F)  
+  predRes(model, validSet) 
+}
+```
+```{r svm_model_det, echo=F}
+if (!exists("modSVM")) {
+  set.seed(20180905)
+  all <- modSVMfn(df_trainSet, df_validSet)
+  modSVM  <- all[[1]]
+  predSVM <- all[[2]]
+  resSVM  <- all[[3]]
+  ooseSVM <- all[[4]]
+  sum_df <- resDF(sum_df, model=modSVM, label="SVM", resCM=resSVM, oose=ooseSVM)
+  rm(all)
+  ix <- ix + 1
+}
+
+knitr::kable(sum_df[ix, ], caption='SVM Summary')
+``` 
+
+Remark: 
+- Here we can see a definitive improvement of the performance of SVM over the previous attempt with LDA and CART.
+- The procedure is more involved and CPU intensive though (over 30 minutes against approximately 10 seconds in the previous cases).
+
+## Bagging technique
+
+Now we are going to define several bagging techniques in an attempt improve on the previous methods (this is called ensemble predictions):
+
+- Bagging CART,
+- Bagging LDA,
+- Random Forest (an extension of bagging, using "feature" bagging).
+
+Remarks: 
+
+- I failed to get results with bagging SVM. I gave up after over 12 hours run without results (more advance techniques) and failures with less involved techniques, more investigation is required.  
+- I Did not try to fine tune these models.
+
+### Bagging CART
+
+```{r bag_cart_model}
+modBA_CARTfn <- function(trainSet, validSet, trctrl=trCtrl()) {
+  model <- train(classe ~ ., data=trainSet, method="treebag", 
+                 trControl=trctrl)
+  predRes(model, validSet)
+}
+```
+
+```{r bag_cart_model_det, echo=F}
+if (!exists("modBA_CART")) {
+  set.seed(20180905)
+  all <- modBA_CARTfn(df_trainSet, df_validSet)
+  modBA_CART  <- all[[1]]
+  predBA_CART <- all[[2]]
+  resBA_CART  <- all[[3]]
+  ooseBA_CART <- all[[4]]
+  sum_df <- resDF(sum_df, model=modBA_CART, label="Bagging CART", resCM=resBA_CART, oose=ooseBA_CART)
+  rm(all)
+  ix <- ix + 1
+}
+
+knitr::kable(sum_df[ix, ], caption='Summary Bagging CART')
+```
+
+Remark:
+
+- the improvement over the single CART model is impressive with 98.3% on validation set (it was 94.4% for CART), 
+- the `oose` dropped from 50.6% to 1.7%.
+- the processing time increased by a factor of 19 for bagged LDA model.
+
+### Bagging LDA
+
+```{r bag_lda_model}
+modBA_LDAfn <- function(trainSet, validSet) {
+  bagCtrl <- bagControl(fit=ldaBag$fit, predict=ldaBag$pred, aggregate=ldaBag$aggregate)
+  # no tuning
+  model <- train(classe ~ ., data=trainSet, method="bag",
+                 B=50, allowParallel=T,
+                 bagControl=bagCtrl)
+  predRes(model, validSet)
+}
+```
+
+```{r bag_lda_model_det, echo=F}
+if (!exists("modBA_LDA")) {
+  set.seed(20180905)
+  all <- modBA_LDAfn(df_trainSet, df_validSet)
+  modBA_LDA  <- all[[1]]
+  predBA_LDA <- all[[2]]
+  resBA_LDA  <- all[[3]]
+  ooseBA_LDA <- all[[4]]
+  sum_df <- resDF(sum_df, model=modBA_LDA, label="Bagging LDA", resCM=resBA_LDA, oose=ooseBA_LDA)
+  rm(all)
+  ix <- ix + 1
+  # print(sum_df[ix, ])
+}
+
+knitr::kable(sum_df[ix, ], caption='Bagging LDA Summary')
+```
+
+Remark: no improvement nor any deterioration in this case for the results (are the samples too similar?).  
+
+
+### Random Forest
+
+```{r rf_model}
+modRFfn <- function(trainSet, validSet, trctrl=trCtrl()) {
+  model <- train(classe ~ ., data=trainSet, method="rf", 
+                  trControl=trctrl, prox=F)
+  predRes(model, validSet) 
+}
+```
+
+```{r rf_model_det, echo=F}
+if (!exists("modRF")) {
+  set.seed(20180905)
+  all <- modRFfn(df_trainSet, df_validSet)
+  modRF  <- all[[1]]
+  predRF <- all[[2]]
+  resRF  <- all[[3]]
+  ooseRF <- all[[4]]
+  sum_df <- resDF(sum_df, model=modRF, label="Random Forest", resCM=resRF, oose=ooseRF)
+  rm(all)
+  ix <- ix + 1
+}
+
+knitr::kable(sum_df[ix, ], caption='RF Summary')
+```
+
+Remark: this model is even better than Bagging CART, it even performs slightly better on validation set with 99.2% of accuracy (compare to training set).
+
+## Boosting technique
+
+Finally, we picked one algorithm from another family of ensemble techniques called boosting, namely SGB (Stochastic Gradient Boosting) using the Gradient Boosting Modeling as defined in the caret package.
+
+### GBM
+
+```{r gbm_model}
+modGBMfn<- function(trainSet, validSet, trctrl=trCtrl(), metric="Accuracy") {
+  model <- train(classe ~ ., data=trainSet, method="gbm", 
+                 trControl=trctrl, metric=metric, verbose=F)
+  predRes(model, validSet) 
+}
+```
+
+```{r gbm_model_det, echo=F}
+if (!exists("modGBM")) {
+  set.seed(20180905)
+  all <- modGBMfn(df_trainSet, df_validSet)
+  modGBM  <- all[[1]]
+  predGBM <- all[[2]]
+  resGBM  <- all[[3]]
+  ooseGBM <- all[[4]]
+  sum_df <- resDF(sum_df, model=modGBM, label="GBM", resCM=resGBM, oose=ooseGBM)
+  rm(all)
+  ix <- ix + 1
+}
+
+knitr::kable(sum_df[ix, ], caption='GBM Summary')
+```
+
+Remark: This model yields good results and ranks at the third place behind Random Forest and Bagging CART models.  
+
+## Stacking technique
+cf. appendix for all the details.
+
+# Summary
+
+We now present the summary for all the models created in the previous sections.  
+
+The columns are named as follows:
+
+- `ds.names` - name of the algorithm technique used,
+- `ds.acc_tr`, `ds_acc_kappa_tr` - the Accuracy and Kappa statistic on the training set,
+- `ds.acc_vs`, `ds_acc_kappa_vs` - the Accuracy and Kappa statistic on the validation set,
+- `ds.oose` - the out-of sample error (calculated on validation set),
+- `ds.utime` - the user time taken by the algorithm (on training set using cross-validation) expressed in seconds.
+
+
+```{r summary_models, echo=F}
+knitr::kable(sum_df, caption='Summary of models')
+```
+
+The three best models in decreasing order (of accuracy on the validation set) are:
+
+1. Bagging Random Forest,
+2. Bagging CART,
+3. Boosting with GBM.
+
+
+# Prediction and conclusion
+
+Let's run our best predictors on the test set.
+
+- With Bagging Random Forest:
+```{r fpred_BA_RF, echo=F}
+if (!exists("fresPredRF")) {
+  fresPredRF <- predict(modRF, df_testing)
+  print("From BA RF: ")
+  print(as.character(fresPredRF))
+}
+```
+
+- With Bagging CART:
+```{r fpred_BA_CART, echo=F}
+if (!exists("fresPredBA_CART")) {
+  fresPredBA_CART <- predict(modBA_CART, df_testing)
+
+  print("From BA CART: ")
+  print(as.character(fresPredBA_CART))
+}
+```
+
+- With Boosting GBM:
+```{r fpred_GBM, echo=F}
+if (!exists("fresPredGBM")) {
+  fresPredGBM <- predict(modGBM, df_testing)
+
+  print("From GBM: ")
+  print(as.character(fresPredGBM))
+}
+```
+
+Our three models agree on the prediction. The next step could be to stack them together in a meta-model and see how it would behave on a bigger test set.
+
+This work could be continued by applying:
+
+- other algorithms and/or
+- invest time on the tuning of the algorithm used (each of them offer some set of options to go further).
+
+Finally, I learned a few techniques while working on this project *and not surprisingly* it is also clear to me that to master these algorithms, methods in their details it will take a long time (which path to mastery is not a long journey?).  
+
+
+# Appendix 
+
+Here, I am providing some more details about the results.  
+For the code source, once again please refer to R script `pml.R`.
+
+## First models
+
+### CART details
+
+```{r A_CART_details, echo=F}
+print(modCART, digits=4)
+
+print(resCART, digits=4)
+```
+
+### LDA details
+```{r A_LDA_details, echo=F}
+print(modLDA, digits=4)
+
+print(resLDA, digits=4)
+```
+
+### SVM details
+
+```{r A_SVM_details, echo=F}
+print(modSVM, digits=4)
+
+print(resSVM, digits=4)
+```
+
+## Bagging
+
+```{r A_BA_CART_details, echo=F}
+print(modBA_CART, digits=4)
+
+print(resBA_CART, digits=4)
+```
+
+### LDA details
+```{r A_BA_LDA_details, echo=F}
+print(modBA_LDA, digits=4)
+
+print(resBA_LDA, digits=4)
+```
+
+### RF details
+
+```{r A_BA_RF_details, echo=F}
+print(modRF, digits=4)
+
+print(resRF, digits=4)
+```
+
+## Boosting - GBM
+
+```{r A_B_GBM_details, echo=F}
+print(modGBM, digits=4)
+
+print(resGBM, digits=4)
+```
+
+## Stacking technique
+
+- We first need to define three different sets: training, testing and validation
+
+```{r A_stacking_sets, echo=F}
+if ((!exists("df_ntrainSet")) || (!exists("df_ntestSet")) || (!exists("df_nvalidSet"))) {
+  all_ds <- splitDS(df_trainingC, cut=0.6)
+  df_ntrainSet <- all_ds[[1]]
+  df_otherSet <- all_ds[[2]]
+
+  all_ds <- splitDS(df_otherSet, cut=0.5)
+  df_ntestSet <- all_ds[[1]]
+  df_nvalidSet <- all_ds[[2]]
+  rm(all_ds)
+  rm(df_otherSet)
+  
+  print(dim(df_ntrainSet)) # 11776x53
+  print(dim(df_ntestSet))  #  3923x53
+  print(dim(df_nvalidSet)) #  3923x53
+}
+
+```
+
+- We then build three models as before on the (smaller) training set: CART, LDA and SVM.
+
+```{r A_stacking_three_models, echo=F}
+## 5.1 - build CART on smaller train set and eval. on test set
+if (!exists("modnCART")) {
+  all <- modCARTfn(df_ntrainSet, df_ntestSet)
+  modnCART  <- all[[1]]
+  prednCART <- all[[2]]
+  resnCART  <- all[[3]]
+  oosenCART <- all[[4]]
+  sumn_df <- resDF(model=modnCART, label="CART", resCM=resnCART, oose=oosenCART)
+  rm(all)
+}
+
+## 5.2 - build LDA on smaller train set and eval. on test set
+if (!exists("modnLDA")) {
+  # print(" modelnLDA... Be patient...")
+  all <- modLDAfn(df_ntrainSet, df_ntestSet)
+  modnLDA  <- all[[1]]
+  prednLDA <- all[[2]]
+  resnLDA  <- all[[3]]
+  oosenLDA <- all[[4]]
+  sumn_df <- resDF(sumn_df, model=modnLDA, label="LDA", resCM=resnLDA, oose=oosenLDA)
+  rm(all)
+}
+
+## 5.3 - build SVM on smaller train set and eval. on test set
+if (!exists("modnSVM")) {
+  # print(" model nSVM... Be patient...")
+  all <- modSVMfn(df_ntrainSet, df_ntestSet)
+  modnSVM  <- all[[1]]
+  prednSVM <- all[[2]]
+  resnSVM  <- all[[3]]
+  oosenSVM <- all[[4]]
+  sumn_df <- resDF(sumn_df, model=modnSVM, label="SVM", resCM=resnSVM, oose=oosenSVM)
+  rm(all)
+}
+```
+
+```{r A_stacking_summary_3_models, echo=F}
+knitr::kable(sumn_df, caption='Summary of models')
+```
+
+- We combine the previous models using Random Forest in similar fashion as what was done in the course (week 4 - combining predictors):
+
+```{r A_stacking_comb_model, echo=F}
+if (!exists("modCombRF")) {
+  df_preds <- data.frame(prednCART, prednLDA, prednSVM, classe=df_ntestSet$classe)
+  modCombRF <- train(classe ~ ., data=df_preds, method="rf")
+  predCombRF <- predict(modCombRF, newdata=df_preds)
+
+  ## on validSet now
+  predmCARTv <- predict(modnCART, newdata=df_nvalidSet)
+  predmLDAv <-  predict(modnLDA, newdata=df_nvalidSet)
+  predmSVMv <-  predict(modnSVM, newdata=df_nvalidSet)
+
+  df_predsv <- data.frame(pred.CART=predmCARTv, pred.LDA=predmLDAv, pred.SVM=predmSVMv)
+  predCombRFv <- predict(modCombRF, df_predsv)
+
+  resCM.RF <- confusionMatrix(df_nvalidSet$classe, predCombRFv)
+  oose.RF  <- 1 - resCM.RF$overall[[1]]
+
+  sumn_df <- resDF(sumn_df, model=modCombRF, label="Stacking RF", resCM=resCM.RF, oose=oose.RF)
+}
+
+knitr::kable(sumn_df, caption='Summary of models - with stacking technique')
+```
+
+Stacking barely improves over the best single models (SVM). The accuracy is slightly better on the validation set 91.8%.
+
+# References
+
+(main) Websites:
+
+- Coursera ["Practical Machine Learning" course](https://www.coursera.org/learn/practical-machine-learning/home/welcome)
+- *Weight Lifting Exercise Dataset from groupware*,  http://groupware.les.inf.puc-rio.br/har
+- Machine Learning Mastery - https://machinelearningmastery.com/ and in particular this reference:  
+  https://machinelearningmastery.com/machine-learning-ensembles-with-r/
+
+(main) Books:
+
+- *An Introduction to Statistical Learning: with Applications in R*, by Gareth James, Daniela Witten, Trevor Hastie, Robert Tibshirani,
+- *The Elements of Statistical Learning: Data Mining, Inference, and Prediction, Second Edition* by Trevor Hastie and Robert Tibshirani,
+- *R in Action: Data Analysis and Graphics with R Second Edition* by Robert Kabacoff
+
+
+
