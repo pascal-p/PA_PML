@@ -515,14 +515,14 @@ For the code source, once again please refer to R script `pml.R`(available here:
 
 ### CART details
 
-```{r A_CART_details, echo=F}
+```{r A_CART_details, echo=F, comment=''}
 print(modCART, digits=4)
 
 print(resCART, digits=4)
 ```
 
 ### LDA details
-```{r A_LDA_details, echo=F}
+```{r A_LDA_details, echo=F, comment=''}
 print(modLDA, digits=4)
 
 print(resLDA, digits=4)
@@ -530,7 +530,7 @@ print(resLDA, digits=4)
 
 ### SVM details
 
-```{r A_SVM_details, echo=F}
+```{r A_SVM_details, echo=F, comment=''}
 print(modSVM, digits=4)
 
 print(resSVM, digits=4)
@@ -538,14 +538,14 @@ print(resSVM, digits=4)
 
 ## Bagging
 
-```{r A_BA_CART_details, echo=F}
+```{r A_BA_CART_details, echo=F, comment=''}
 print(modBA_CART, digits=4)
 
 print(resBA_CART, digits=4)
 ```
 
 ### LDA details
-```{r A_BA_LDA_details, echo=F}
+```{r A_BA_LDA_details, echo=F, comment=''}
 print(modBA_LDA, digits=4)
 
 print(resBA_LDA, digits=4)
@@ -553,7 +553,7 @@ print(resBA_LDA, digits=4)
 
 ### RF details
 
-```{r A_BA_RF_details, echo=F}
+```{r A_BA_RF_details, echo=F, comment=''}
 print(modRF, digits=4)
 
 print(resRF, digits=4)
@@ -561,7 +561,7 @@ print(resRF, digits=4)
 
 ## Boosting - GBM
 
-```{r A_B_GBM_details, echo=F}
+```{r A_B_GBM_details, echo=F, comment=''}
 print(modGBM, digits=4)
 
 print(resGBM, digits=4)
@@ -658,7 +658,9 @@ if (!exists("modCombRF")) {
 knitr::kable(sumn_df, caption='Summary of models - with stacking technique')
 ```
 
-Stacking barely improves over the best single models (SVM). The accuracy is slightly better on the validation set 91.8%.
+Remark:
+
+- Stacking barely improves over the best single models (SVM). The accuracy is slightly better on the validation set 91.8%.
 
 # References
 
